@@ -9,7 +9,11 @@ epoch = datetime.datetime.utcfromtimestamp(0)
 def unix_time_millis(dt):
     return int((dt - epoch).total_seconds() * 1000)
 
-def loadCsv(inputfilename, server, metric, tcolumn, tformat, tags, usegzip, delimiter, batchsize):
+def loadCsv(inputfilename, server, metric, timecolumn, timeformat, tagcolumns, usegzip, delimiter, batchsize):
+
+    # format tags
+    if tagcolumns:
+        tagcolumns = tagcolumns.split(',')
 
     # open csv
     datapoints = []
@@ -18,31 +22,30 @@ def loadCsv(inputfilename, server, metric, tcolumn, tformat, tags, usegzip, deli
     with open(inputfilename, 'r') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
-            point = [unix_time_millis(datetime.datetime.strptime(row[tcolumn],tformat)), float(row[metric])]
+            name = metric
+            timestamp = unix_time_millis(datetime.datetime.strptime(row[timecolumn],timeformat))
+            value = float(row[metric])
+            if tagcolumns:
+                tags = {}
+                for t in tagcolumns:
+                    v = 0
+                    if t in row:
+                        v = row[t]
+                    tags[t] = v
+
+                point = {"name": metric, "timestamp": timestamp, "value": value, "tags": tags}
+
             datapoints.append(point)
 
-            if count % 100000 == 0:
+            if count % batchsize == 0:
                 print 'Read %d lines'%count
             count+=1
-
-    # format tags
-    tks = tags.split(',')
-    tags = {}
-    for t in tks:
-        tks2 = t.split(':')
-        tags[tks2[0]] = tks2[1]
 
     start = 0
     end = min(count, batchsize)
     while start < count:
 
-        data = [
-            {
-                "name": metric,
-                "tags": tags,
-                "datapoints": datapoints[start:end]
-            }
-        ]
+        data = datapoints[start:end]
 
         # insert
         print 'Inserting datapoints...'
@@ -74,17 +77,17 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--server', nargs='?', default='http://localhost:8080',
                         help='Server address. Default: http://localhost:8080')
 
-    parser.add_argument('-m', '--mname', nargs='?', default='value',
+    parser.add_argument('-m', '--metricname', nargs='?', default='value',
                         help='Metric column name. Default: value')
 
-    parser.add_argument('-tc', '--tcolumn', nargs='?', default='timestamp',
+    parser.add_argument('-tc', '--timecolumn', nargs='?', default='timestamp',
                         help='Timestamp column name. Default: timestamp.')
 
-    parser.add_argument('-tf', '--tformat', nargs='?', default='%Y-%m-%d %H:%M:%S',
+    parser.add_argument('-tf', '--timeformat', nargs='?', default='%Y-%m-%d %H:%M:%S',
                         help='Timestamp format. Default: \'%%Y-%%m-%%d %%H:%%M:%%S\' e.g.: 1970-01-01 00:00:00')
 
-    parser.add_argument('-t', '--tags', nargs='?', default='host:server',
-                        help='Tag names separated by comma, e.g.: host:server1,data_center:dc1. Default: host:server')
+    parser.add_argument('-t', '--tagcolumns', nargs='?', default='host',
+                        help='List of csv columns to use as tags, separated by comma, e.g.: host,data_center. Default: host')
 
     parser.add_argument('-g', '--gzip', action='store_true', default=False,
                         help='Compress before sending to kairodb.')
@@ -93,4 +96,4 @@ if __name__ == "__main__":
                         help='Batch size. Default: 5000.')
 
     args = parser.parse_args()
-    loadCsv(args.input, args.server, args.mname, args.tcolumn, args.tformat, args.tags, args.gzip, args.delimiter, args.batchsize)
+    loadCsv(args.input, args.server, args.metricname, args.timecolumn, args.timeformat, args.tagcolumns, args.gzip, args.delimiter, args.batchsize)
