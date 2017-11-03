@@ -49,13 +49,12 @@ def loadCsv(inputfilename, server, metric, timecolumn, timeformat, tagcolumns, u
                     response = requests.post(server + "/api/v1/datapoints", gzipped, headers=headers)
                 else:
                     response = requests.post(server + "/api/v1/datapoints", json.dumps(datapoints))
-                    print server + "/api/v1/datapoints"
 
-                if response != "400":
+                if response.status_code != 204:
                     print 'Problem inserting points, exiting...'
                     exit(1)
 
-                print "Wrote %d, response: %d (status code)" % (end-start, response.status_code)
+                print "Wrote %d, response: %d (status code)" % (len(datapoints), response.status_code)
 
                 datapoints = []
 
