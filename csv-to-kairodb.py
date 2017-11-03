@@ -45,10 +45,10 @@ def loadCsv(inputfilename, server, metric, timecolumn, timeformat, tagcolumns, u
                 print 'Inserting %d datapoints...'%(len(datapoints))
                 if usegzip:
                     headers = {'content-type': 'application/gzip'}
-                    gzipped = gzip.compress(bytes(json.dumps(data), 'UTF-8'))
+                    gzipped = gzip.compress(bytes(json.dumps(datapoints), 'UTF-8'))
                     response = requests.post(server + "/api/v1/datapoints", gzipped, headers=headers)
                 else:
-                    response = requests.post(server + "/api/v1/datapoints", json.dumps(data))
+                    response = requests.post(server + "/api/v1/datapoints", json.dumps(datapoints))
                     print server + "/api/v1/datapoints"
 
                 if response != "400":
