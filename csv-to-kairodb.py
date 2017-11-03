@@ -36,19 +36,35 @@ def loadCsv(inputfilename, server, metric, timecolumn, timeformat, tagcolumns, u
                 point = {"name": metric, "timestamp": timestamp, "value": value, "tags": tags}
 
             datapoints.append(point)
-
-            if count % batchsize == 0:
-                print 'Read %d lines'%count
             count+=1
 
-    start = 0
-    end = min(count, batchsize)
-    while start < count:
+            if len(datapoints) % batchsize == 0:
 
-        data = datapoints[start:end]
+                # insert
+                print 'Read %d lines'%count
+                print 'Inserting %d datapoints...'%(len(datapoints))
+                if usegzip:
+                    headers = {'content-type': 'application/gzip'}
+                    gzipped = gzip.compress(bytes(json.dumps(data), 'UTF-8'))
+                    response = requests.post(server + "/api/v1/datapoints", gzipped, headers=headers)
+                else:
+                    response = requests.post(server + "/api/v1/datapoints", json.dumps(data))
+                    print server + "/api/v1/datapoints"
 
+                if response != "400":
+                    print 'Problem inserting points, exiting...'
+                    exit(1)
+
+                print "Wrote %d, response: %d (status code)" % (end-start, response.status_code)
+
+                datapoints = []
+
+
+    # write rest
+    if len(datapoints) > 0:
         # insert
-        print 'Inserting datapoints...'
+        print 'Read %d lines'%count
+        print 'Inserting %d datapoints...'%(len(datapoints))
         if usegzip:
             headers = {'content-type': 'application/gzip'}
             gzipped = gzip.compress(bytes(json.dumps(data), 'UTF-8'))
@@ -57,12 +73,13 @@ def loadCsv(inputfilename, server, metric, timecolumn, timeformat, tagcolumns, u
             response = requests.post(server + "/api/v1/datapoints", json.dumps(data))
             print server + "/api/v1/datapoints"
 
-        print "Wrote %d, response: %d (status code)" % (end-start, response.status_code)
-        print start, end
+        if response != "400":
+            print 'Problem inserting points, exiting...'
+            exit(1)
 
-        start += batchsize
-        end = min(count, end+batchsize)
+        print "Wrote %d, response: %s" % (len(datapoints), response)
 
+    print 'Done'
 
     
 if __name__ == "__main__":
@@ -86,7 +103,7 @@ if __name__ == "__main__":
     parser.add_argument('-tf', '--timeformat', nargs='?', default='%Y-%m-%d %H:%M:%S',
                         help='Timestamp format. Default: \'%%Y-%%m-%%d %%H:%%M:%%S\' e.g.: 1970-01-01 00:00:00')
 
-    parser.add_argument('-t', '--tagcolumns', nargs='?', default='host',
+    parser.add_argument('--tagcolumns', nargs='?', default='host',
                         help='List of csv columns to use as tags, separated by comma, e.g.: host,data_center. Default: host')
 
     parser.add_argument('-g', '--gzip', action='store_true', default=False,
